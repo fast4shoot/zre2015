@@ -6,6 +6,7 @@
 #include <sstream>
 #define OK 0
 #define ERR 1
+#define not !
 
 void help()
 {
@@ -21,6 +22,28 @@ void help()
 	std::cerr << "            Josef Ridky (xridky00)\n\n";
 	std::cerr << "\n--------------------\n\n";
 
+}
+
+
+bool load_book(std::vector<float> &book, std::ifstream &opened_stream){
+
+    if (opened_stream.is_open()) {
+        std::string line;
+
+        while ( getline (opened_stream,line) )
+        {
+            std::istringstream number_row(line);
+            float tmp;
+
+            while(number_row >> tmp){
+                book.push_back(tmp);
+
+            }
+        }
+
+     } else return false;
+
+return true;
 }
 
 int main(int argc, char **argv)
@@ -41,35 +64,17 @@ int main(int argc, char **argv)
     std::vector<float> LPCcodebook;
     std::vector<float> GainCodebook;
 
-    if (lpc.is_open()) {
-        std::string line;
-        while ( getline (lpc,line) )
-        {
-            std::istringstream number_row(line);
-            float tmp;
 
-            while(number_row >> tmp){
-                LPCcodebook.push_back(tmp);
+    if(not load_book(LPCcodebook, lpc)){
+        std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
+        return ERR;
+    }
 
-            }
-        }
-        lpc.close();
-     }
+    if(not load_book(GainCodebook, gain)){
+        std::cerr << "\n\nERROR: gain codebook loading fail!!\n";
+        return ERR;
+    }
 
-    if (gain.is_open()) {
-        std::string line;
-        while ( getline (gain,line) )
-        {
-            std::istringstream number_row(line);
-            float tmp;
-
-            while(number_row >> tmp){
-                GainCodebook.push_back(tmp);
-
-            }
-        }
-        gain.close();
-     }
 
 /*
     function ss=decoder(filecod, filewav);
