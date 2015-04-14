@@ -6,7 +6,7 @@
 #include <sstream>
 #define OK 0
 #define ERR 1
-#define not !
+
 
 void help()
 {
