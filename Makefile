@@ -1,4 +1,4 @@
-CXXFLAGS += -std=c++11
+CXXFLAGS += -g -std=c++11
 
 PROGRAM = zre_proj1_linux
 SOURCES = main.cpp
