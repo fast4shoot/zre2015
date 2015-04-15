@@ -6,6 +6,8 @@
 #include <sstream>
 #define OK 0
 #define ERR 1
+#define LPCD true
+#define GAIND false
 
 
 /*
@@ -103,20 +105,36 @@ bool load_cod_file(std::vector<int> &LPCIndex, std::vector<int> &GainIndex, std:
 }
 
 /*
- * void decode(source, index, result)
- * 	copy data from source at specific index into result
+ * void decode(source, index, result, type)
+ * 	copy data from source at specific index into result by choosing type of processing 
  *
  * 	params: source - vector of floats
  * 		index - vector of ints
  * 		result - vector of floats
+ * 		type - boolean
  *
  * 	return: void
  */
 
-void decode(std::vector<float> &source, std::vector<int> &index, std::vector<float> &result)
+void decode(std::vector<float> &source, std::vector<int> &index, std::vector<float> &result, bool type)
 {
-	for(int i = 0; i < index.size(); i++){
-		result.push_back(source[index[i]]-1);
+	if(type == LPCD){
+	
+		for(int i = 0; i < index.size(); i++){
+
+			int j = (index[i]-1) * 10, end = j + 10; 
+
+			for(; j < end; j++){
+				result.push_back(source[j]);
+			}
+		}
+
+	} else {
+
+		for(int i = 0; i < index.size(); i++){
+                        result.push_back(source[index[i]-1]);
+                }
+
 	}
 }
 
@@ -160,8 +178,8 @@ int main(int argc, char **argv)
 	}
 	
 	// decode data from input .cod file
-	decode(LPCCodebook, LPCIndex, LPCDecode);
-	decode(GainCodebook, GainIndex, GainDecode);
+	decode(LPCCodebook, LPCIndex, LPCDecode, LPCD);
+	decode(GainCodebook, GainIndex, GainDecode, GAIND);
 
 	/* control prints
  
