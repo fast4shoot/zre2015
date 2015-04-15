@@ -8,6 +8,13 @@
 #define ERR 1
 
 
+/*
+ * void help()
+ * 	print help on standard error output
+ * 	
+ * 	return: void
+ */
+
 void help()
 {
 	std::cerr << "\n";
@@ -24,26 +31,93 @@ void help()
 
 }
 
+/*
+ * bool load_book(book, opened_stream)
+ *	load data from opened_stream into book
+ *
+ *	params: book - vector of floats
+ *		opened_stream - input stream to file
+ *
+ *	return: bool
+ */
 
-bool load_book(std::vector<float> &book, std::ifstream &opened_stream){
+bool load_book(std::vector<float> &book, std::ifstream &opened_stream)
+{
 
-    if (opened_stream.is_open()) {
-        std::string line;
+    	if (opened_stream.is_open()) {
+        	std::string line;
 
-        while ( getline (opened_stream,line) )
-        {
-            std::istringstream number_row(line);
-            float tmp;
+        	while ( getline (opened_stream,line) )
+        	{
+            		std::istringstream number_row(line);
+	            	float tmp;
 
-            while(number_row >> tmp){
-                book.push_back(tmp);
+        	    	while(number_row >> tmp){
+                		book.push_back(tmp);
+	            	}
+        	}
 
-            }
-        }
+     	} else {
+		return false;
+     	}
 
-     } else return false;
+	return true;
+}
 
-return true;
+/*
+ * bool load_cod_file(LPCIndex, GainIndex, LIndex, input)
+ * 	load indexes from input and store them into LPCIndex, GainIndex and LIndex
+ * 	
+ * 	params: LPCIndex - vector of ints
+ * 		GainIndex - vector of ints
+ * 		LIndex - vector of ints
+ *		imput = input stream to file
+ *
+ * 	return: bool
+ */
+
+bool load_cod_file(std::vector<int> &LPCIndex, std::vector<int> &GainIndex, std::vector<int> &LIndex, std::ifstream &input)
+{
+	if(input.is_open()){
+		std::string line;
+
+		while( getline(input,line) ){
+			std::istringstream index_line(line);
+			int index;
+
+			index_line >> index; 
+			LPCIndex.push_back(index);
+
+			index_line >> index;	
+			GainIndex.push_back(index);
+		
+			index_line >> index;
+			LIndex.push_back(index);
+		}	
+
+	} else {
+		return false;
+	}
+
+	return true;
+}
+
+/*
+ * void decode(source, index, result)
+ * 	copy data from source at specific index into result
+ *
+ * 	params: source - vector of floats
+ * 		index - vector of ints
+ * 		result - vector of floats
+ *
+ * 	return: void
+ */
+
+void decode(std::vector<float> &source, std::vector<int> &index, std::vector<float> &result)
+{
+	for(int i = 0; i < index.size(); i++){
+		result.push_back(source[index[i]]-1);
+	}
 }
 
 int main(int argc, char **argv)
@@ -61,22 +135,46 @@ int main(int argc, char **argv)
 	std::ifstream input (argv[3]);
 	std::ofstream output (argv[4]);
 
-    std::vector<float> LPCcodebook;
-    std::vector<float> GainCodebook;
+    	std::vector<float> LPCCodebook, LPCDecode;
+	std::vector<float> GainCodebook, GainDecode;
+	std::vector<int> LPCIndex;
+	std::vector<int> GainIndex;
+	std::vector<int> LIndex;
 
+	// load LPC code book
+	if(!load_book(LPCCodebook, lpc)){
+        	std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
+	        return ERR;
+    	}
 
-    if(not load_book(LPCcodebook, lpc)){
-        std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
-        return ERR;
-    }
+	// load Gain code book
+	if(!load_book(GainCodebook, gain)){
+        	std::cerr << "\n\nERROR: gain codebook loading fail!!\n";
+	        return ERR;
+    	}
 
-    if(not load_book(GainCodebook, gain)){
-        std::cerr << "\n\nERROR: gain codebook loading fail!!\n";
-        return ERR;
-    }
+	// load input .cod file
+	if(!load_cod_file(LPCIndex, GainIndex, LIndex, input)){
+		std::cerr << "\n\nERROR: input loading fail !!! \n";
+		return ERR;
+	}
+	
+	// decode data from input .cod file
+	decode(LPCCodebook, LPCIndex, LPCDecode);
+	decode(GainCodebook, GainIndex, GainDecode);
+
+	/* control prints
+ 
+	std::cout << LPCCodebook.size() << std::endl << GainCodebook.size() << std::endl;
+	std::cout << LPCIndex.size() << std::endl << GainIndex.size() << std::endl << LIndex.size() << std::endl;
+	std::cout << LPCDecode.size() << std::endl << GainDecode.size() << std::endl;
+	*/
 
 
 /*
+    ---------------------------------------------------------------------------------
+     DONE BEGIN
+    ---------------------------------------------------------------------------------
     function ss=decoder(filecod, filewav);
     % function ss=decoder(filewav, filecod);
     %
@@ -94,6 +192,9 @@ int main(int argc, char **argv)
 
     Adecoded = cb210(:,asym);
     Gdecoded = gcb64(:,gsym);
+    ----------------------------------------------------------------------------------
+     DONE END
+    ----------------------------------------------------------------------------------	
 
     % and synthesis
     ss = synthesize (Adecoded,Gdecoded,L,10,160);
