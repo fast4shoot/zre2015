@@ -152,44 +152,32 @@ int main(int argc, char **argv)
 	}	
 
 	// open files	
-    std::ifstream lpc_file (argv[1]);
-    std::ifstream gain_file (argv[2]);
-    std::ifstream input_file (argv[3]);
+	std::ifstream lpc_file (argv[1]);
+	std::ifstream gain_file (argv[2]);
+	std::ifstream input_file (argv[3]);
 	std::ofstream output (argv[4]);
 
 
-    std::vector<float> LPCCodebook, LPCDecode;
-    std::vector<float> GainCodebook, GainDecode;
-    std::vector<int> LPCIndex;
-    std::vector<int> GainIndex;
-    std::vector<int> LIndex;
-
-    if(not load_book(LPCCodebook, lpc_file)){
-        std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
-        return ERR;
-    }
-
-    if(not load_book(GainCodebook, gain_file)){
-        std::cerr << "\n\nERROR: gain codebook loading fail!!\n";
-        return ERR;
-    }
-
-
-
+    	std::vector<float> LPCCodebook, LPCDecode;
+	std::vector<float> GainCodebook, GainDecode;
+	std::vector<int> LPCIndex;
+	std::vector<int> GainIndex;
+	std::vector<int> LIndex;
+	
 	// load LPC code book
-    if(!load_book(LPCCodebook, lpc_file)){
-        	std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
-	        return ERR;
-    	}
+	if(!load_book(LPCCodebook, lpc_file)){
+    		std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
+		return ERR;
+	}
 
 	// load Gain code book
-    if(!load_book(GainCodebook, gain_file)){
+	if(!load_book(GainCodebook, gain_file)){
         	std::cerr << "\n\nERROR: gain codebook loading fail!!\n";
 	        return ERR;
     	}
 
 	// load input .cod file
-    if(!load_cod_file(LPCIndex, GainIndex, LIndex, input_file)){
+	if(!load_cod_file(LPCIndex, GainIndex, LIndex, input_file)){
 		std::cerr << "\n\nERROR: input loading fail !!! \n";
 		return ERR;
 	}
@@ -311,9 +299,9 @@ init a final jsou parametry stavu filtru pocatecni a koncovy, ktery se stava nov
 
 
 	// close files
-    lpc_file.close();
-    gain_file.close();
-    input_file.close();
+	lpc_file.close();
+	gain_file.close();
+	input_file.close();
 	output.close();
 	return OK;
 }
