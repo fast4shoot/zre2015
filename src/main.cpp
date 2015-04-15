@@ -6,7 +6,16 @@
 #include <sstream>
 #define OK 0
 #define ERR 1
+#define LPCD true
+#define GAIND false
 
+
+/*
+ * void help()
+ * 	print help on standard error output
+ * 	
+ * 	return: void
+ */
 
 void help()
 {
@@ -24,55 +33,111 @@ void help()
 
 }
 
-struct input {
-    unsigned int lpc;
-    unsigned int gain;
-    unsigned int lag;
-};
-
-bool load_input(std::vector<input> &inputVector, std::ifstream &opened_stream){
-
-    if (opened_stream.is_open()) {
-        std::string line;
-
-        while ( getline (opened_stream,line) )
-        {
-            std::istringstream number_row(line);
-            input tmp;
-
-            number_row >> tmp.lpc;
-            number_row >> tmp.gain;
-            number_row >> tmp.lag;
-
-            inputVector.push_back(tmp);
 
 
-        }
+/*
+ * bool load_book(book, opened_stream)
+ *	load data from opened_stream into book
+ *
+ *	params: book - vector of floats
+ *		opened_stream - input stream to file
+ *
+ *	return: bool
+ */
 
-     } else return false;
+bool load_book(std::vector<float> &book, std::ifstream &opened_stream)
+{
 
-return true;
+    	if (opened_stream.is_open()) {
+        	std::string line;
+
+        	while ( getline (opened_stream,line) )
+        	{
+            		std::istringstream number_row(line);
+	            	float tmp;
+
+        	    	while(number_row >> tmp){
+                		book.push_back(tmp);
+	            	}
+        	}
+
+     	} else {
+		return false;
+     	}
+
+	return true;
 }
 
-bool load_book(std::vector<float> &book, std::ifstream &opened_stream){
+/*
+ * bool load_cod_file(LPCIndex, GainIndex, LIndex, input)
+ * 	load indexes from input and store them into LPCIndex, GainIndex and LIndex
+ * 	
+ * 	params: LPCIndex - vector of ints
+ * 		GainIndex - vector of ints
+ * 		LIndex - vector of ints
+ *		imput = input stream to file
+ *
+ * 	return: bool
+ */
 
-    if (opened_stream.is_open()) {
-        std::string line;
+bool load_cod_file(std::vector<int> &LPCIndex, std::vector<int> &GainIndex, std::vector<int> &LIndex, std::ifstream &input)
+{
+	if(input.is_open()){
+		std::string line;
 
-        while ( getline (opened_stream,line) )
-        {
-            std::istringstream number_row(line);
-            float tmp;
+		while( getline(input,line) ){
+			std::istringstream index_line(line);
+			int index;
 
-            while(number_row >> tmp){
-                book.push_back(tmp);
+			index_line >> index; 
+			LPCIndex.push_back(index);
 
-            }
-        }
+			index_line >> index;	
+			GainIndex.push_back(index);
+		
+			index_line >> index;
+			LIndex.push_back(index);
+		}	
 
-     } else return false;
+	} else {
+		return false;
+	}
 
-return true;
+	return true;
+}
+
+/*
+ * void decode(source, index, result, type)
+ * 	copy data from source at specific index into result by choosing type of processing 
+ *
+ * 	params: source - vector of floats
+ * 		index - vector of ints
+ * 		result - vector of floats
+ * 		type - boolean
+ *
+ * 	return: void
+ */
+
+void decode(std::vector<float> &source, std::vector<int> &index, std::vector<float> &result, bool type)
+{
+	if(type == LPCD){
+	
+		for(int i = 0; i < index.size(); i++){
+
+			int j = (index[i]-1) * 10, end = j + 10; 
+
+			for(; j < end; j++){
+				result.push_back(source[j]);
+			}
+		}
+
+	} else {
+
+		for(int i = 0; i < index.size(); i++){
+                        result.push_back(source[index[i]-1]);
+                }
+
+	}
 }
 
 
@@ -92,12 +157,14 @@ int main(int argc, char **argv)
     std::ifstream input_file (argv[3]);
 	std::ofstream output (argv[4]);
 
-    std::vector<float> LPCcodebook;     //tvori skupiny po 10 - celkem 5120 cisel pro 512 filtru
-    std::vector<float> GainCodebook;
-    std::vector<input> inputVector;
 
+    std::vector<float> LPCCodebook, LPCDecode;
+    std::vector<float> GainCodebook, GainDecode;
+    std::vector<int> LPCIndex;
+    std::vector<int> GainIndex;
+    std::vector<int> LIndex;
 
-    if(not load_book(LPCcodebook, lpc_file)){
+    if(not load_book(LPCCodebook, lpc_file)){
         std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
         return ERR;
     }
@@ -107,28 +174,42 @@ int main(int argc, char **argv)
         return ERR;
     }
 
-    if(not load_input(inputVector, input_file)){
-        std::cerr << "\n\nERROR: input loading fail!!\n";
-        return ERR;
-    }
 
 
-    std::vector<unsigned> Adecoded;     //this is index to first filter coefficient in LPCcodebook
-    std::vector<float> Gdecoded;        //this is direct value from GainCodebook
+	// load LPC code book
+    if(!load_book(LPCCodebook, lpc_file)){
+        	std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
+	        return ERR;
+    	}
 
+	// load Gain code book
+    if(!load_book(GainCodebook, gain_file)){
+        	std::cerr << "\n\nERROR: gain codebook loading fail!!\n";
+	        return ERR;
+    	}
 
-    for(int i = 0; i < inputVector.size(); i++){
-        Adecoded.push_back(inputVector.at(i).lpc * 10);
+	// load input .cod file
+    if(!load_cod_file(LPCIndex, GainIndex, LIndex, input_file)){
+		std::cerr << "\n\nERROR: input loading fail !!! \n";
+		return ERR;
+	}
+	
+	// decode data from input .cod file
+	decode(LPCCodebook, LPCIndex, LPCDecode, LPCD);
+	decode(GainCodebook, GainIndex, GainDecode, GAIND);
 
-        unsigned gain_index = inputVector.at(i).gain;
-        Gdecoded.push_back(GainCodebook.at(gain_index));
-
-    }
-
-    //vypada ze lag se nedekoduje..
+	/* control prints
+ 
+	std::cout << LPCCodebook.size() << std::endl << GainCodebook.size() << std::endl;
+	std::cout << LPCIndex.size() << std::endl << GainIndex.size() << std::endl << LIndex.size() << std::endl;
+	std::cout << LPCDecode.size() << std::endl << GainDecode.size() << std::endl;
+	*/
 
 
 /*
+    ---------------------------------------------------------------------------------
+     DONE BEGIN
+    ---------------------------------------------------------------------------------
     function ss=decoder(filecod, filewav);
     % function ss=decoder(filewav, filecod);
     %
@@ -146,6 +227,9 @@ int main(int argc, char **argv)
 
     Adecoded = cb210(:,asym);
     Gdecoded = gcb64(:,gsym);
+    ----------------------------------------------------------------------------------
+     DONE END
+    ----------------------------------------------------------------------------------	
 
     % and synthesis
     ss = synthesize (Adecoded,Gdecoded,L,10,160);
@@ -163,7 +247,7 @@ int main(int argc, char **argv)
     % A - matrix with predictor coefficients (each vector in a column, no a0 coefficient)
     % G - vector with gains (row, each element is one gain).
     % L - lags (row, zero means unvoiced, lag is in samples)
-    % P - order of predictor
+    % P - order of predictor            -je to 10 vice koeficientu nemame
     % lram - length of window. The function DOES NOT SUPPORT OVERLAPPED FRAMES!
     %
     % output:
@@ -208,6 +292,16 @@ int main(int argc, char **argv)
     %  power = sum(excit .^ 2) / lram
 
       % now just generate the output
+
+/*
+y = filter(b,a,x) filters the input data, x, using a rational transfer function
+defined by the numerator and denominator coefficients b and a, respectively.
+
+Y(z) = b(1..n) / 1+ a(2..n)
+
+init a final jsou parametry stavu filtru pocatecni a koncovy, ktery se stava novym pocatecnim..
+*/
+      /*
       [synt,final] = filter (g,a,excit,init);
       ss(from:to) = synt; % !!! this line was originally at the end.
       init = final;
