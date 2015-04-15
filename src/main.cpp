@@ -24,6 +24,35 @@ void help()
 
 }
 
+struct input {
+    unsigned int lpc;
+    unsigned int gain;
+    unsigned int lag;
+};
+
+bool load_input(std::vector<input> &inputVector, std::ifstream &opened_stream){
+
+    if (opened_stream.is_open()) {
+        std::string line;
+
+        while ( getline (opened_stream,line) )
+        {
+            std::istringstream number_row(line);
+            input tmp;
+
+            number_row >> tmp.lpc;
+            number_row >> tmp.gain;
+            number_row >> tmp.lag;
+
+            inputVector.push_back(tmp);
+
+
+        }
+
+     } else return false;
+
+return true;
+}
 
 bool load_book(std::vector<float> &book, std::ifstream &opened_stream){
 
@@ -46,6 +75,8 @@ bool load_book(std::vector<float> &book, std::ifstream &opened_stream){
 return true;
 }
 
+
+
 int main(int argc, char **argv)
 {
 	//checking number of params
@@ -56,24 +87,45 @@ int main(int argc, char **argv)
 	}	
 
 	// open files	
-	std::ifstream lpc (argv[1]);
-	std::ifstream gain (argv[2]);
-	std::ifstream input (argv[3]);
+    std::ifstream lpc_file (argv[1]);
+    std::ifstream gain_file (argv[2]);
+    std::ifstream input_file (argv[3]);
 	std::ofstream output (argv[4]);
 
-    std::vector<float> LPCcodebook;
+    std::vector<float> LPCcodebook;     //tvori skupiny po 10 - celkem 5120 cisel pro 512 filtru
     std::vector<float> GainCodebook;
+    std::vector<input> inputVector;
 
 
-    if(not load_book(LPCcodebook, lpc)){
+    if(not load_book(LPCcodebook, lpc_file)){
         std::cerr << "\n\nERROR: lpc codebook loading fail!!\n";
         return ERR;
     }
 
-    if(not load_book(GainCodebook, gain)){
+    if(not load_book(GainCodebook, gain_file)){
         std::cerr << "\n\nERROR: gain codebook loading fail!!\n";
         return ERR;
     }
+
+    if(not load_input(inputVector, input_file)){
+        std::cerr << "\n\nERROR: input loading fail!!\n";
+        return ERR;
+    }
+
+
+    std::vector<unsigned> Adecoded;     //this is index to first filter coefficient in LPCcodebook
+    std::vector<float> Gdecoded;        //this is direct value from GainCodebook
+
+
+    for(int i = 0; i < inputVector.size(); i++){
+        Adecoded.push_back(inputVector.at(i).lpc * 10);
+
+        unsigned gain_index = inputVector.at(i).gain;
+        Gdecoded.push_back(GainCodebook.at(gain_index));
+
+    }
+
+    //vypada ze lag se nedekoduje..
 
 
 /*
@@ -165,9 +217,9 @@ int main(int argc, char **argv)
 
 
 	// close files
-	lpc.close();
-	gain.close();
-	input.close();
+    lpc_file.close();
+    gain_file.close();
+    input_file.close();
 	output.close();
 	return OK;
 }
