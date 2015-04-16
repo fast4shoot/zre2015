@@ -4,6 +4,7 @@
 #include<cmath>
 #include <vector>
 #include <sstream>
+#include <random>
 #define OK 0
 #define ERR 1
 #define LPCD true
@@ -141,6 +142,86 @@ void decode(std::vector<float> &source, std::vector<int> &index, std::vector<flo
 }
 
 
+// chaby pokus o prepsani synthesis funkce ......
+// nejlepe smazat a udelat znovu ......
+void synthesis(std::vector<float> A, std::vector<float> G, std::vector<int> L){
+
+	int P = 10, lram = 160;
+	int Nram = G.size();
+	
+	//initial conditions of filter
+	std::vector<float> init(P,0); 
+	std::vector<float> ss(Nram * lram,0); 
+	
+	// some initial values - position of the next pulse for voiced frames (C++ indexing)
+    	int nextvoiced = 0;
+	
+	for( int n = 0; n < Nram; n++){
+		std::vector<float> a;
+		a.push_back(1.0);
+		for( int j = 0; j <= n*10+10; j++){
+			a.push_back(A[j]);
+		}
+		float g = G[n];
+		int l = L[n];
+		std::vector<float> excit(lram,0.0);
+		std::default_random_engine generator;
+		std::normal_distribution<float> distribution(0.0,1.0);
+
+		if(l == 0){
+			for(int i = 0; i < lram; i++){
+				excit[i]=distribution(generator);
+			}
+		} else {
+			int step = nextvoiced;
+			std::vector<int> where;
+			while(step <= lram){
+				where.push_back(step);
+				step += l;
+			}
+			int maximum = where[0];			
+			for(int i = 1; i < where.size(); i++){
+				if(where[i] > maximum){
+					maximum = where[i];
+				}
+			}
+			nextvoiced = maximum + l - lram;
+		      	
+			for(int i = 0; i < where.size(); i++){
+                                excit[where[i]] = 1.0;
+                        }
+
+		}
+
+		//vypocet power a nasledneho excit = excit / sqrt(power)
+	}
+
+/*  Vzor z matlabu
+ 
+    from = 1; to = from + lram -1;
+    for n = 1:Nram,
+      a = [1; A(:,n)]; % appending with 1 for filtering
+      g = G(n);
+      l = L(n);
+
+      % in case the frame is unvoiced, generate noise
+      if l == 0,
+        excit = randn (1,lram); % this has power one ...
+      else % if it is voiced, generate some pulses
+        where = nextvoiced:l:lram;
+        % ok, this is for the current frame, but where should be the 1st pulse in the
+        % next one ?
+        nextvoiced = max(where) + l - lram;
+        % generate the pulses
+        excit = zeros(1,lram); excit(where) = 1;
+      end
+      % and set the power of excitation  to one - no necessary for noise, but anyway ...
+      power = sum(excit .^ 2) / lram;
+      excit = excit / sqrt(power);
+      % check
+*/
+}
+
 
 int main(int argc, char **argv)
 {
@@ -186,6 +267,10 @@ int main(int argc, char **argv)
 	decode(LPCCodebook, LPCIndex, LPCDecode, LPCD);
 	decode(GainCodebook, GainIndex, GainDecode, GAIND);
 
+	
+	// synthesis
+	
+	synthesis(LPCDecode,GainDecode,LIndex);
 	/* control prints
  
 	std::cout << LPCCodebook.size() << std::endl << GainCodebook.size() << std::endl;
