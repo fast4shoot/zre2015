@@ -10,7 +10,7 @@
 #define LPCD true
 #define GAIND false
 
-
+#include "filter.h"
 /*
  * void help()
  * 	print help on standard error output
@@ -144,56 +144,127 @@ void decode(std::vector<float> &source, std::vector<int> &index, std::vector<flo
 
 // chaby pokus o prepsani synthesis funkce ......
 // nejlepe smazat a udelat znovu ......
-void synthesis(std::vector<float> A, std::vector<float> G, std::vector<int> L){
+void synthesis(std::vector<float> decodedLPC, std::vector<float> decodedGains, std::vector<int> Lags){
 
-	int P = 10, lram = 160;
-	int Nram = G.size();
+    int P = 10, frameLength = 160;
+    int no_of_frames = decodedGains.size();
 	
+    Filter filter;
+
 	//initial conditions of filter
-	std::vector<float> init(P,0); 
-	std::vector<float> ss(Nram * lram,0); 
+    //std::vector<float> init(P,0);  //zbytecne
+    std::vector<float> ss(no_of_frames * frameLength,0);
 	
 	// some initial values - position of the next pulse for voiced frames (C++ indexing)
     	int nextvoiced = 0;
-	
-	for( int n = 0; n < Nram; n++){
-		std::vector<float> a;
+
+    //from = 1; to = from + lram -1;
+    //for n = 1:Nram,
+    for( int frameIndex = 0; frameIndex < no_of_frames; frameIndex++){
+
+        //a = [1; A(:,n)]; % appending with 1 for filtering
+        //g = G(n);
+        //l = L(n);
+        std::vector<float> a;
 		a.push_back(1.0);
-		for( int j = 0; j <= n*10+10; j++){
-			a.push_back(A[j]);
+        for( int j = 0; j <= frameIndex * 10 + 10; j++){
+            a.push_back(decodedLPC[j]);
 		}
-		float g = G[n];
-		int l = L[n];
-		std::vector<float> excit(lram,0.0);
+
+        std::vector<float> gain;
+        gain.push_back(decodedGains[frameIndex]);   //sorry
+
+        int lag = Lags[frameIndex];
+
+        std::vector<float> excit(frameLength,0.0);
 		std::default_random_engine generator;
 		std::normal_distribution<float> distribution(0.0,1.0);
 
-		if(l == 0){
-			for(int i = 0; i < lram; i++){
-				excit[i]=distribution(generator);
-			}
+        /*
+        % in case the frame is unvoiced, generate noise
+        if l == 0,
+          excit = randn (1,lram); % this has power one ...
+        else % if it is voiced, generate some pulses
+          where = nextvoiced:l:lram;
+          % ok, this is for the current frame, but where should be the 1st pulse in the
+          % next one ?
+          nextvoiced = max(where) + l - lram;
+          % generate the pulses
+          excit = zeros(1,lram); excit(where) = 1;
+        end*/
+        if(lag == 0){
+            for(int i = 0; i < frameLength; i++){
+                excit[i]=distribution(generator);       //hmm co to power one v komentari
+            }
 		} else {
+
+            //where naplnime po krocich s delkou lag
 			int step = nextvoiced;
 			std::vector<int> where;
-			while(step <= lram){
+            while(step <= frameLength){
 				where.push_back(step);
-				step += l;
+                step += lag;
 			}
+
+            //najdeme peak
 			int maximum = where[0];			
 			for(int i = 1; i < where.size(); i++){
 				if(where[i] > maximum){
 					maximum = where[i];
 				}
 			}
-			nextvoiced = maximum + l - lram;
+            //a znej odvodime kde asi bude dalsi
+            nextvoiced = maximum + lag - frameLength;
 		      	
+            //na indexech vsech vrcholu z where generujeme 1 pulsy
 			for(int i = 0; i < where.size(); i++){
-                                excit[where[i]] = 1.0;
-                        }
+                excit[where[i]] = 1.0;
+            }
 
 		}
 
-		//vypocet power a nasledneho excit = excit / sqrt(power)
+
+        /*
+        % and set the power of excitation  to one - no necessary for noise, but anyway ...
+        power = sum(excit .^ 2) / lram;
+        excit = excit / sqrt(power);
+        % check
+      %  power = sum(excit .^ 2) / lram
+
+        */
+
+        float power = 0.0f;
+
+        for(int i = 0; i < excit.size(); i++){
+            power += excit[i] * excit[i];
+        }
+
+        power /= frameLength;
+
+        float power_sqrt = sqrt(power);
+
+        for(int i = 0; i < excit.size(); i++){
+            excit[i] = excit[i] / power_sqrt;
+        }
+
+
+        for(int i = 0; i < excit.size(); i++){
+
+            ss.push_back(filter.do_step(gain, a, excit.at(i)));
+
+        }
+
+        /*
+        % now just generate the output
+        [synt,final] = filter (g,a,excit,init);
+        ss(from:to) = synt; % !!! this line was originally at the end.
+        init = final;
+        from = from + lram; to = from + lram -1;
+      end
+         */
+
+
+
 	}
 
 /*  Vzor z matlabu
@@ -219,7 +290,16 @@ void synthesis(std::vector<float> A, std::vector<float> G, std::vector<int> L){
       power = sum(excit .^ 2) / lram;
       excit = excit / sqrt(power);
       % check
+    %  power = sum(excit .^ 2) / lram
+
+      % now just generate the output
+      [synt,final] = filter (g,a,excit,init);
+      ss(from:to) = synt; % !!! this line was originally at the end.
+      init = final;
+      from = from + lram; to = from + lram -1;
+    end
 */
+
 }
 
 

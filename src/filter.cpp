@@ -1,12 +1,12 @@
 #include "filter.h"
 
 
-filter::filter()
+Filter::Filter()
 {
 
 }
 
-filter::~filter()
+Filter::~Filter()
 {
 
 }
@@ -14,7 +14,7 @@ filter::~filter()
 
 //% A - matrix with predictor coefficients (each vector in a column, no a0 coefficient)
 //takze predpokladam ze b0 je vzdy 1
-float filter::do_step(std::vector<float> &fir_part, std::vector<float> &iir_part, float signal){
+float Filter::do_step(std::vector<float> &fir_part, std::vector<float> &iir_part, float signal){
 
 
     //correcting the size of state and incoming coeficients to match

@@ -1,8 +1,8 @@
 CXXFLAGS += -g -std=c++11
 
 PROGRAM = zre_proj1_linux
-SOURCES = main.cpp
-HEADERS = 
+SOURCES = main.cpp filter.cpp
+HEADERS = filter.h
 
 HEADERDIR = src
 SRCDIR = src
