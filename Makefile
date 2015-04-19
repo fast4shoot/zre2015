@@ -19,7 +19,7 @@ clean:
 	$(RM) $(PROGRAM)
 
 $(PROGRAM): $(OBJSFULL)
-	$(CXX) $(CXXFLAGS) $(LDLIBS) $(LDFLAGS) -o $@ $? 
+	$(CXX) $(CXXFLAGS) $(LDLIBS) $(LDFLAGS) -o $@ $^
 
 $(OBJDIR)/%.o: $(SRCDIR)/% $(HEADERSFULL)
 	mkdir -p $(@D)

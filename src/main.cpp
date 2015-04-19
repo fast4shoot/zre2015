@@ -1,7 +1,7 @@
-#include<iostream>
-#include<fstream>
-
-#include<cmath>
+#include <iostream>
+#include <fstream>
+#include <cstdint>
+#include <cmath>
 #include <vector>
 #include <sstream>
 #include <random>
@@ -141,10 +141,19 @@ void decode(std::vector<float> &source, std::vector<int> &index, std::vector<flo
 	}
 }
 
-
+void write_output(const std::vector<float>& signal, std::ofstream& file)
+{
+	for (auto sample : signal)
+	{
+		if (sample > 1.0f || sample < -1.0f) std::cout << "sample: " << sample << std::endl;
+		auto sample_in_range = std::max(-1.0f, std::min(1.0f, sample));
+		int16_t sample_value = int16_t(sample_in_range < 0.0 ? sample_in_range * 32768 : sample_in_range * 32767);
+		file.write(reinterpret_cast<char*>(&sample_value), 2);
+	}
+}
 // chaby pokus o prepsani synthesis funkce ......
 // nejlepe smazat a udelat znovu ......
-void synthesis(std::vector<float> decodedLPC, std::vector<float> decodedGains, std::vector<int> Lags){
+std::vector<float> synthesis(const std::vector<float>& decodedLPC, const std::vector<float>& decodedGains, const std::vector<int>& Lags){
 
     int P = 10, frameLength = 160;
     int no_of_frames = decodedGains.size();
@@ -299,7 +308,7 @@ void synthesis(std::vector<float> decodedLPC, std::vector<float> decodedGains, s
       from = from + lram; to = from + lram -1;
     end
 */
-
+	return ss;
 }
 
 
@@ -346,11 +355,11 @@ int main(int argc, char **argv)
 	// decode data from input .cod file
 	decode(LPCCodebook, LPCIndex, LPCDecode, LPCD);
 	decode(GainCodebook, GainIndex, GainDecode, GAIND);
-
 	
 	// synthesis
 	
-	synthesis(LPCDecode,GainDecode,LIndex);
+	auto signal = synthesis(LPCDecode,GainDecode,LIndex);
+	write_output(signal, output);
 	/* control prints
  
 	std::cout << LPCCodebook.size() << std::endl << GainCodebook.size() << std::endl;
