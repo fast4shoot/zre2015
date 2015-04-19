@@ -5,10 +5,14 @@
 #include <vector>
 #include <sstream>
 #include <random>
+#include <cassert>
+
 #define OK 0
 #define ERR 1
 #define LPCD true
 #define GAIND false
+
+typedef unsigned int uint;
 
 #include "filter.h"
 /*
@@ -49,22 +53,21 @@ void help()
 bool load_book(std::vector<float> &book, std::ifstream &opened_stream)
 {
 
-    	if (opened_stream.is_open()) {
-        	std::string line;
+	if (opened_stream.is_open()) {
+		std::string line;
 
-        	while ( getline (opened_stream,line) )
-        	{
-            		std::istringstream number_row(line);
-	            	float tmp;
+		while ( getline (opened_stream,line) )
+		{
+			std::istringstream number_row(line);
+			float tmp;
 
-        	    	while(number_row >> tmp){
-                		book.push_back(tmp);
-	            	}
-        	}
-
-     	} else {
+			while(number_row >> tmp){
+				book.push_back(tmp);
+			}
+		}
+	} else {
 		return false;
-     	}
+	}
 
 	return true;
 }
@@ -81,7 +84,7 @@ bool load_book(std::vector<float> &book, std::ifstream &opened_stream)
  * 	return: bool
  */
 
-bool load_cod_file(std::vector<int> &LPCIndex, std::vector<int> &GainIndex, std::vector<int> &LIndex, std::ifstream &input)
+bool load_cod_file(std::vector<uint> &LPCIndex, std::vector<uint> &GainIndex, std::vector<uint> &LIndex, std::ifstream &input)
 {
 	if(input.is_open()){
 		std::string line;
@@ -107,38 +110,24 @@ bool load_cod_file(std::vector<int> &LPCIndex, std::vector<int> &GainIndex, std:
 	return true;
 }
 
-/*
- * void decode(source, index, result, type)
- * 	copy data from source at specific index into result by choosing type of processing 
- *
- * 	params: source - vector of floats
- * 		index - vector of ints
- * 		result - vector of floats
- * 		type - boolean
- *
- * 	return: void
- */
-
-void decode(std::vector<float> &source, std::vector<int> &index, std::vector<float> &result, bool type)
+// Decodes gains, one at a time
+float decode_gain(uint index, const std::vector<uint>& indices, const std::vector<float>& gains)
 {
-	if(type == LPCD){
-	
-		for(int i = 0; i < index.size(); i++){
+	return gains.at(indices.at(index) - 1);
+}
 
-			int j = (index[i]-1) * 10, end = j + 10; 
-
-			for(; j < end; j++){
-				result.push_back(source[j]);
-			}
-		}
-
-	} else {
-
-		for(int i = 0; i < index.size(); i++){
-                        result.push_back(source[index[i]-1]);
-                }
-
+// Decodes LPC coeffs, one at a time
+std::vector<float> decode_lpc(uint index, const std::vector<uint>& indices, const std::vector<float>& coeffs, uint order)
+{
+	uint step = coeffs.size() / order;
+	assert(step * order == coeffs.size());
+	std::vector<float> result(order + 1);
+	result[0] = 1.0;
+	for (uint i = 0; i < order; i++)
+	{
+		result[i + 1] = coeffs.at(index + i * step);
 	}
+	return result;
 }
 
 void write_output(const std::vector<float>& signal, std::ofstream& file)
@@ -151,163 +140,74 @@ void write_output(const std::vector<float>& signal, std::ofstream& file)
 		file.write(reinterpret_cast<char*>(&sample_value), 2);
 	}
 }
+
 // chaby pokus o prepsani synthesis funkce ......
 // nejlepe smazat a udelat znovu ......
-std::vector<float> synthesis(const std::vector<float>& decodedLPC, const std::vector<float>& decodedGains, const std::vector<int>& Lags){
-
-    int P = 10, frameLength = 160;
-    int no_of_frames = decodedGains.size();
+std::vector<float> synthesis(
+	const std::vector<float>& coeffs,
+	const std::vector<uint>& coeffs_indices,
 	
-    Filter filter;
-
-	//initial conditions of filter
-    //std::vector<float> init(P,0);  //zbytecne
-    std::vector<float> ss(no_of_frames * frameLength,0);
+	const std::vector<float>& gains,
+	const std::vector<uint>& gains_indices,
 	
-	// some initial values - position of the next pulse for voiced frames (C++ indexing)
-    	int nextvoiced = 0;
+	const std::vector<uint>& lags,
+	
+	uint lpcOrder,
+	uint frame_length)
+{
+	uint no_of_frames = gains_indices.size();
+	
+	Filter filter;
+	std::vector<float> iir(0, 0.0);
+	std::vector<float> ss(no_of_frames * frame_length,0);
+	
 
-    //from = 1; to = from + lram -1;
-    //for n = 1:Nram,
-    for( int frameIndex = 0; frameIndex < no_of_frames; frameIndex++){
-
-        //a = [1; A(:,n)]; % appending with 1 for filtering
-        //g = G(n);
-        //l = L(n);
-        std::vector<float> a;
-		a.push_back(1.0);
-        for( int j = 0; j <= frameIndex * 10 + 10; j++){
-            a.push_back(decodedLPC[j]);
-		}
-
-        std::vector<float> gain;
-        gain.push_back(decodedGains[frameIndex]);   //sorry
-
-        int lag = Lags[frameIndex];
-
-        std::vector<float> excit(frameLength,0.0);
-		std::default_random_engine generator;
-		std::normal_distribution<float> distribution(0.0,1.0);
-
-        /*
-        % in case the frame is unvoiced, generate noise
-        if l == 0,
-          excit = randn (1,lram); % this has power one ...
-        else % if it is voiced, generate some pulses
-          where = nextvoiced:l:lram;
-          % ok, this is for the current frame, but where should be the 1st pulse in the
-          % next one ?
-          nextvoiced = max(where) + l - lram;
-          % generate the pulses
-          excit = zeros(1,lram); excit(where) = 1;
-        end*/
-        if(lag == 0){
-            for(int i = 0; i < frameLength; i++){
-                excit[i]=distribution(generator);       //hmm co to power one v komentari
-            }
-		} else {
-
-            //where naplnime po krocich s delkou lag
-			int step = nextvoiced;
-			std::vector<int> where;
-            while(step <= frameLength){
-				where.push_back(step);
-                step += lag;
+	uint excitation_start = 0;
+	uint prev_lag = 1;
+	
+	for (uint frame_idx = 0; frame_idx < no_of_frames; frame_idx++)
+	{
+		auto fir = decode_lpc(frame_idx, coeffs_indices, coeffs, lpcOrder);
+		auto gain = decode_gain(frame_idx, gains_indices, gains);
+		uint lag = lags.at(frame_idx);
+		uint frame_start_idx = frame_idx * frame_length;
+		
+		for (uint local_sample_idx = 0; local_sample_idx < frame_length; local_sample_idx++)
+		{
+			uint global_sample_idx = frame_start_idx + local_sample_idx;
+			float excitation = 0.0;
+			
+			uint used_lag;
+			
+			if (excitation_start < frame_start_idx)
+				used_lag = prev_lag;
+			else
+				used_lag = lag;
+			
+			if (used_lag == 0)
+			{
+				excitation_start = global_sample_idx + 1;
 			}
-
-            //najdeme peak
-			int maximum = where[0];			
-			for(int i = 1; i < where.size(); i++){
-				if(where[i] > maximum){
-					maximum = where[i];
-				}
+			else
+			{
+				auto excitation_cycle = global_sample_idx - excitation_start;
+				if (excitation_cycle * 2 < used_lag)
+					excitation = 1.0f;
+				else 
+					excitation = -1.0f;
+					
+				if (excitation_cycle == used_lag - 1) // jsme na konci cyklu?
+					excitation_start += used_lag;
 			}
-            //a znej odvodime kde asi bude dalsi
-            nextvoiced = maximum + lag - frameLength;
-		      	
-            //na indexech vsech vrcholu z where generujeme 1 pulsy
-			for(int i = 0; i < where.size(); i++){
-                excit[where[i]] = 1.0;
-            }
-
+			
+			float filtered = filter.do_step(fir, iir, excitation);
+			float amplified = filtered * gain;
+			ss[global_sample_idx] = amplified;
 		}
-
-
-        /*
-        % and set the power of excitation  to one - no necessary for noise, but anyway ...
-        power = sum(excit .^ 2) / lram;
-        excit = excit / sqrt(power);
-        % check
-      %  power = sum(excit .^ 2) / lram
-
-        */
-
-        float power = 0.0f;
-
-        for(int i = 0; i < excit.size(); i++){
-            power += excit[i] * excit[i];
-        }
-
-        power /= frameLength;
-
-        float power_sqrt = sqrt(power);
-
-        for(int i = 0; i < excit.size(); i++){
-            excit[i] = excit[i] / power_sqrt;
-        }
-
-
-        for(int i = 0; i < excit.size(); i++){
-
-            ss.push_back(filter.do_step(gain, a, excit.at(i)));
-
-        }
-
-        /*
-        % now just generate the output
-        [synt,final] = filter (g,a,excit,init);
-        ss(from:to) = synt; % !!! this line was originally at the end.
-        init = final;
-        from = from + lram; to = from + lram -1;
-      end
-         */
-
-
-
+		
+		prev_lag = lag;
 	}
-
-/*  Vzor z matlabu
- 
-    from = 1; to = from + lram -1;
-    for n = 1:Nram,
-      a = [1; A(:,n)]; % appending with 1 for filtering
-      g = G(n);
-      l = L(n);
-
-      % in case the frame is unvoiced, generate noise
-      if l == 0,
-        excit = randn (1,lram); % this has power one ...
-      else % if it is voiced, generate some pulses
-        where = nextvoiced:l:lram;
-        % ok, this is for the current frame, but where should be the 1st pulse in the
-        % next one ?
-        nextvoiced = max(where) + l - lram;
-        % generate the pulses
-        excit = zeros(1,lram); excit(where) = 1;
-      end
-      % and set the power of excitation  to one - no necessary for noise, but anyway ...
-      power = sum(excit .^ 2) / lram;
-      excit = excit / sqrt(power);
-      % check
-    %  power = sum(excit .^ 2) / lram
-
-      % now just generate the output
-      [synt,final] = filter (g,a,excit,init);
-      ss(from:to) = synt; % !!! this line was originally at the end.
-      init = final;
-      from = from + lram; to = from + lram -1;
-    end
-*/
+	
 	return ss;
 }
 
@@ -328,11 +228,11 @@ int main(int argc, char **argv)
 	std::ofstream output (argv[4]);
 
 
-    	std::vector<float> LPCCodebook, LPCDecode;
-	std::vector<float> GainCodebook, GainDecode;
-	std::vector<int> LPCIndex;
-	std::vector<int> GainIndex;
-	std::vector<int> LIndex;
+	std::vector<float> LPCCodebook;
+	std::vector<float> GainCodebook;
+	std::vector<uint> LPCIndex;
+	std::vector<uint> GainIndex;
+	std::vector<uint> LIndex;
 	
 	// load LPC code book
 	if(!load_book(LPCCodebook, lpc_file)){
@@ -352,13 +252,8 @@ int main(int argc, char **argv)
 		return ERR;
 	}
 	
-	// decode data from input .cod file
-	decode(LPCCodebook, LPCIndex, LPCDecode, LPCD);
-	decode(GainCodebook, GainIndex, GainDecode, GAIND);
-	
 	// synthesis
-	
-	auto signal = synthesis(LPCDecode,GainDecode,LIndex);
+	auto signal = synthesis(LPCCodebook, LPCIndex, GainCodebook, GainIndex, LIndex, 10, 160);
 	write_output(signal, output);
 	/* control prints
  
@@ -366,111 +261,6 @@ int main(int argc, char **argv)
 	std::cout << LPCIndex.size() << std::endl << GainIndex.size() << std::endl << LIndex.size() << std::endl;
 	std::cout << LPCDecode.size() << std::endl << GainDecode.size() << std::endl;
 	*/
-
-
-/*
-    ---------------------------------------------------------------------------------
-     DONE BEGIN
-    ---------------------------------------------------------------------------------
-    function ss=decoder(filecod, filewav);
-    % function ss=decoder(filewav, filecod);
-    %
-    % ZRE decoder 1050 bits per second
-    % filecod - name of file with coded input.
-    % filewav - name of synthesized wav file (8kHz, 1 channel, lin)
-    % s - an auxiliary output with the synthesized signal.
-    % makes use of codebooks cb210.txt for A coefficients and gcb64.txt for gain
-
-    load cb210.txt
-    load gcb64.txt
-
-    % reading the file
-    [asym,gsym,L] = textread (filecod,'%d%d%d');
-
-    Adecoded = cb210(:,asym);
-    Gdecoded = gcb64(:,gsym);
-    ----------------------------------------------------------------------------------
-     DONE END
-    ----------------------------------------------------------------------------------	
-
-    % and synthesis
-    ss = synthesize (Adecoded,Gdecoded,L,10,160);
-
-    % write it out
-    wavwrite (ss,8000,16,filewav);
- */
-
-/*
-    function ss = synthesize(A,G,L,P,lram);
-    % ss = syntnoise(A,G,P,lram);
-    %
-    % synthesizes signal excited by white noise (unvoiced) or periodic pulses (voiced)
-    % by a matrix with predictor parameters and vector of gains.
-    % A - matrix with predictor coefficients (each vector in a column, no a0 coefficient)
-    % G - vector with gains (row, each element is one gain).
-    % L - lags (row, zero means unvoiced, lag is in samples)
-    % P - order of predictor            -je to 10 vice koeficientu nemame
-    % lram - length of window. The function DOES NOT SUPPORT OVERLAPPED FRAMES!
-    %
-    % output:
-    % ss - a long row vector with the resulting signal.
-    %
-    % the function does not do much error-checking, so if A, G or L are of bad sizes,
-    % sorry...
-    %
-    % Fri May  6 13:26:22 CEST 2011 - corrected  bug lenghtening the sig by 1 frame and
-    %  putting zeros first (marked !!!)
-
-
-
-    Nram = length(G);
-    init=zeros(P,1);        % initial conditions of the filter
-    ss = zeros(1,Nram * lram); % preallocation is needed for long signals.
-
-    % some initial values - position of the next pulse for voiced frames (Matlab indexing)
-    nextvoiced = 1;
-
-    from = 1; to = from + lram -1;
-    for n = 1:Nram,
-      a = [1; A(:,n)]; % appending with 1 for filtering
-      g = G(n);
-      l = L(n);
-
-      % in case the frame is unvoiced, generate noise
-      if l == 0,
-        excit = randn (1,lram); % this has power one ...
-      else % if it is voiced, generate some pulses
-        where = nextvoiced:l:lram;
-        % ok, this is for the current frame, but where should be the 1st pulse in the
-        % next one ?
-        nextvoiced = max(where) + l - lram;
-        % generate the pulses
-        excit = zeros(1,lram); excit(where) = 1;
-      end
-      % and set the power of excitation  to one - no necessary for noise, but anyway ...
-      power = sum(excit .^ 2) / lram;
-      excit = excit / sqrt(power);
-      % check
-    %  power = sum(excit .^ 2) / lram
-
-      % now just generate the output
-
-/*
-y = filter(b,a,x) filters the input data, x, using a rational transfer function
-defined by the numerator and denominator coefficients b and a, respectively.
-
-Y(z) = b(1..n) / 1+ a(2..n)
-
-init a final jsou parametry stavu filtru pocatecni a koncovy, ktery se stava novym pocatecnim..
-*/
-      /*
-      [synt,final] = filter (g,a,excit,init);
-      ss(from:to) = synt; % !!! this line was originally at the end.
-      init = final;
-      from = from + lram; to = from + lram -1;
-    end
-*/
-
 
 	// close files
 	lpc_file.close();
