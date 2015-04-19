@@ -11,13 +11,14 @@ Velikost jeho stavu zavisi na poctu vlozenych koeficientu, ktery by se ale nemel
 class Filter
 {
 public:
-    Filter();
-
+    Filter(unsigned int fir_size, unsigned int iir_size);
     ~Filter();
 
-    std::deque<float> state;
 
     float do_step(std::vector<float> &fir_part, std::vector<float> &iir_part, float signal);
+    
+    std::deque<float> input_state;
+    std::deque<float> output_state;
 };
 
 #endif // FILTER_H

@@ -1,48 +1,42 @@
 #include "filter.h"
+#include <cassert>
 
-
-Filter::Filter()
+Filter::Filter(unsigned int fir_size, unsigned int iir_size):
+	input_state(fir_size),
+	output_state(iir_size - 1)
 {
-
 }
 
 Filter::~Filter()
 {
-
 }
 
 
-//% A - matrix with predictor coefficients (each vector in a column, no a0 coefficient)
-//takze predpokladam ze b0 je vzdy 1
-float Filter::do_step(std::vector<float> &fir_part, std::vector<float> &iir_part, float signal){
+// predpokladame, ze iir_part[0] je 1.0
+float Filter::do_step(std::vector<float> &fir_part, std::vector<float> &iir_part, float signal)
+{
+	typedef unsigned int uint;
+	
+	assert(fir_part.size() == input_state.size());
+	assert(iir_part.size() == output_state.size() + 1);
+	
+	input_state.pop_back();
+	input_state.push_front(signal);
 
+	float result = 0.0;
 
-    //correcting the size of state and incoming coeficients to match
-    while(state.size() < fir_part.size() || state.size() < iir_part.size())
-        state.push_back(0.0f);
+	for (uint i = 0; i < fir_part.size(); i++)
+	{
+		result += input_state.at(i) * fir_part.at(i);
+	}
+	
+	for (uint i = 0; i < iir_part.size() - 1; i++)
+	{
+		result -= output_state.at(i) * iir_part.at(i + 1);
+	}
 
-    while(fir_part.size() < iir_part.size())
-        fir_part.push_back(0.0f);
+	output_state.pop_back();
+	output_state.push_front(result);
 
-    while(iir_part.size() < fir_part.size())
-        iir_part.push_back(0.0f);
-
-
-    //bigger index -> bigger delay
-
-    float history = 0.0f;
-
-    for(int i = 0; i < state.size(); i++){
-
-        history += state[i] * fir_part[i] - state[i] * iir_part[i];
-
-    }
-
-
-    float result = signal + history;
-
-    state.push_front(signal);   //signal pro priste se spozdenim 1
-    state.pop_back();   //a posledni se zahodi..
-
-return result;
+	return result;
 }
